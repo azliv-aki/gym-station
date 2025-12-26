@@ -13,10 +13,10 @@ export default function CartSummary({
   return (
     <div style={{ marginTop: 24 }}>
       <p>
-        合計: {totalAmount.amount} {totalAmount.currencyCode}
+        合計: {Number(totalAmount.amount).toLocaleString()} {totalAmount.currencyCode}
       </p>
 
-      <button onClick={onCheckout}>
+      <button onClick={onCheckout} disabled={!totalAmount}>
         決済ページへ
       </button>
     </div>

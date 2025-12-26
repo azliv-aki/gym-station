@@ -95,6 +95,7 @@ export const CART_QUERY = `
   query CartQuery($cartId: ID!) {
     cart(id: $cartId) {
       id
+      checkoutUrl
       totalQuantity
       cost {
         subtotalAmount {
