@@ -31,12 +31,12 @@ export async function addToCart({ variantId, quantity }: { variantId: string; qu
 
       return cartId
     } catch (error) {
-      // cartId が無効なら作り直す
-      console.warn('Cart invalid, recreating', error)
+      // cartId が壊れてた → 下で作り直す
+      cookieStore.delete('cartId')
     }
   }
 
-  // ② cart がなければ新規作成
+  // ② cart がない or 壊れてたら新規作成
   const data = await shopifyFetch<{
     cartCreate: {
       cart: { id: string }
@@ -61,6 +61,7 @@ export async function addToCart({ variantId, quantity }: { variantId: string; qu
 
   return newCartId
 }
+
 // カート情報を取得
 export async function getCart(): Promise<Cart | null> {
   // ① cartId を「サーバー文脈」から取得
@@ -76,7 +77,29 @@ export async function getCart(): Promise<Cart | null> {
   }>(CART_QUERY, { cartId })
 
   // ④ cart が無効 / 失効していた場合
-  if (!data.cart) return null
+  if (!data.cart) {
+    cookieStore.delete('cartId')
+    return null
+  }
+
+  const cart = data.cart
+
+  // 🧠 中身が空（商品消失）
+  if (cart.lines.nodes.length === 0) {
+    return {
+      id: cart.id,
+      checkoutUrl: cart.checkoutUrl,
+      totalQuantity: 0,
+      cost: cart.cost,
+      lines: [],
+    }
+  }
+
+  // 🧠 checkoutUrl が無効
+  if (!cart.checkoutUrl) {
+    cookieStore.delete('cartId')
+    return null
+  }
 
   // ⑤ UI 用の形に整形
   return {
@@ -114,4 +137,43 @@ export async function removeCartLine({ lineId }: { lineId: string }) {
     cartId,
     lineIds: [lineId],
   })
+}
+
+// 決済直前にカートを再チェック
+export async function proceedToCheckout(): Promise<
+  | { ok: true; checkoutUrl: string }
+  | { ok: false; reason: string }
+> {
+  const cookieStore = await cookies()
+  const cartId = cookieStore.get('cartId')?.value
+
+  if (!cartId) {
+    return { ok: false, reason: 'カートが見つかりません' }
+  }
+
+  const data = await shopifyFetch<{ cart: any }>(CART_QUERY, { cartId })
+
+  const cart = data.cart
+  if (!cart) {
+    cookieStore.delete('cartId')
+    return { ok: false, reason: 'カートが失効しました' }
+  }
+
+  if (!cart.checkoutUrl) {
+    cookieStore.delete('cartId')
+    return { ok: false, reason: '決済URLを取得できませんでした' }
+  }
+
+  if (cart.lines.nodes.length === 0) {
+    return { ok: false, reason: 'カートが空です' }
+  }
+
+  // merchandise が消えていないか
+  for (const line of cart.lines.nodes) {
+    if (!line.merchandise) {
+      return { ok: false, reason: '販売終了した商品があります' }
+    }
+  }
+
+  return { ok: true, checkoutUrl: cart.checkoutUrl }
 }

@@ -4,16 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import CartItemRow from '@/lib/components/CartItemRow'
 import CartSummary from '@/lib/components/CartSummary'
-import { updateCartLine, removeCartLine } from '@/lib/shopify/cart'
+import { proceedToCheckout, updateCartLine, removeCartLine } from '@/lib/shopify/cart'
 import { Cart } from '@/lib/shopify/types'
 
-export default function CartClient({
-  gymId,
-  cart,
-}: {
-  gymId: string
-  cart: Cart
-}) {
+export default function CartClient({ gymId, cart }: { gymId: string; cart: Cart }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -41,6 +35,24 @@ export default function CartClient({
     })
   }
 
+  const handleCheckout = () => {
+    startTransition(async () => {
+      try {
+        const result = await proceedToCheckout()
+
+        if (!result.ok) {
+          alert(result.reason)
+          router.refresh()
+          return
+        }
+
+        window.location.href = result.checkoutUrl
+      } catch (e) {
+        alert('決済処理に失敗しました')
+      }
+    })
+  }
+
   return (
     <div>
       {cart.lines.map((line) => (
@@ -57,11 +69,7 @@ export default function CartClient({
         totalAmount={cart.cost.totalAmount}
         disabled={isPending}
         onCheckout={() => {
-          if (!cart.checkoutUrl) {
-            alert('決済URLを取得できませんでした')
-            return
-          }
-          window.location.href = cart.checkoutUrl
+          handleCheckout()
         }}
       />
     </div>
