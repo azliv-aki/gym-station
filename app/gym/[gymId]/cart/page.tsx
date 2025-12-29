@@ -5,9 +5,9 @@ import CartClient from './CartClient'
 export const dynamic = 'force-dynamic'
 
 type PageProps = {
-  params: {
+  params: Promise<{
     gymId: string
-  }
+  }>
 }
 
 export default async function CartPage({ params }: PageProps) {
